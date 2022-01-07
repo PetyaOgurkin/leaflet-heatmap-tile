@@ -22,8 +22,8 @@ var crs = new L.Proj.CRS('EPSG:3576',
     '+proj=laea +lat_0=90 +lon_0=90 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs',
     {
         resolutions,
-        origin: [-7109342.085, -4859377.085],
-        bounds: L.bounds([-7109342.085, -4859377.085], [2909412.085, 5159377.085])
+        origin: [-4859377.085, -7109342.085],
+        bounds: L.bounds([-4859377.085, -7109342.085], [5159377.085, 2909412.085])
     })
 
 
@@ -33,7 +33,7 @@ var map = L.map('map', {
     crs: crs,
     continuousWorld: true,
     worldCopyJump: false,
-}).setView([0, 0], 2);
+}).setView([55, 90], 2);
 L.tileLayer('http://monitor.krasn.ru/tiles/sentinel2016/{z}/{x}/{-y}.jpeg').addTo(map);
 
 const DOT_SIZE = 20
@@ -105,19 +105,21 @@ const colorScale = (schema) => {
     }
 }
 
+const to255 = (value) => (value - -100) * 255 / (70 - -100)
 const colorSchema = [
-    [0, '#CD0074'],
-    [21, '#7209AB'],
-    [43, '#3914B0'],
-    [64, '#1240AC'],
-    [106, '#009A9A'],
-    [128, '#00CC00'],
-    [149, '#9FEE00'],
-    [170, '#FFFF00'],
-    [191, '#FFD300'],
-    [213, '#FFAA00'],
-    [234, '#FF7400'],
-    [255, '#FF0000']
+    [to255(-40), '#810f7c'],
+    [to255(-30), '#08519c'],
+    [to255(-20), '#08519c'],
+    [to255(-10), '#2171b5'],
+    [to255(-5), '#14D100'],
+    [to255(0), '#62E200'],
+    [to255(5), '#FFFF00'],
+    [to255(10), '#addd8e'],
+    [to255(15), '#fed976'],
+    [to255(20), '#feb24c'],
+    [to255(30), '#fd8d3c'],
+    [to255(40), '#e31a1c'],
+    [to255(50), '#800026'],
 ]
 
 const colors = colorScale(colorSchema)
@@ -143,10 +145,17 @@ img.onload = () => {
     }
 
 
-    const dataBbox = [-180, 90, 180, 90]
+    const dataBbox = [19, 41, -168, 82]
     const part = Math.round(img.width / Math.abs(dataBbox[2] - dataBbox[0]))
 
-
+    const getBboxConditionFunc = () => {
+        if (dataBbox[2] < dataBbox[0]) {
+            return (lon, lat) =>
+                (lon >= dataBbox[0] && lat >= dataBbox[1] && lat <= dataBbox[3]) ||
+                (lon >= -180 && lon <= dataBbox[2] && lat >= dataBbox[1] && lat <= dataBbox[3])
+        }
+        return (lon, lat) => lon >= dataBbox[0] && lon <= dataBbox[2] && lat >= dataBbox[1] && lat <= dataBbox[3]
+    }
 
 
     if (!tile) {
@@ -177,6 +186,8 @@ img.onload = () => {
             return ((q11 * (x2 - x) * (y2 - y)) / d) + ((q21 * (x - x1) * (y2 - y)) / d) + ((q12 * (x2 - x) * (y - y1)) / d) + ((q22 * (x - x1) * (y - y1)) / d)
         }
 
+        const bboxConditionFunc = getBboxConditionFunc()
+
 
         var CanvasLayer = L.GridLayer.extend({
             createTile: function (coords) {
@@ -188,6 +199,7 @@ img.onload = () => {
                 tile.width = size.x
                 tile.height = size.y
 
+
                 const nw = coords.scaleBy(size)
                 const se = nw.add(size)
                 const compression = 4;
@@ -195,16 +207,18 @@ img.onload = () => {
                 for (let y = nw.y, i = 0; y <= se.y; y += compression, i += compression) {
                     for (let x = nw.x, j = 0; x <= se.x; x += compression, j += compression) {
                         const latlng = map.unproject([x + half, y + half], coords.z)
+                        if (bboxConditionFunc(latlng.lng, latlng.lat)) {
+                            const value = imageArray.getValue(latlng.lng, latlng.lat)
 
-                        const value = imageArray.getValue(latlng.lng, latlng.lat)
+                            ctx.fillStyle = colors(value);
+                            ctx.fillRect(
+                                j,
+                                i,
+                                compression,
+                                compression
+                            );
+                        }
 
-                        ctx.fillStyle = colors(value);
-                        ctx.fillRect(
-                            j,
-                            i,
-                            compression,
-                            compression
-                        );
                     }
                 }
 
@@ -340,7 +354,8 @@ img.onload = () => {
 
 const temp = () => {
     // img.src = 'https://www.ventusky.com/data/2022/01/05/icon/whole_world/hour_17/icon_teplota_2_m_20220105_17.jpg?1642032'
-    img.src = '/examples/temp.jpg'
+    // img.src = '/examples/temp.jpg'
+    img.src = 'http://gis.krasn.ru/agro-gfs/202111/01/2021110118_temp_surface.jpg'
     img.crossOrigin = "anonymous";
 }
 
